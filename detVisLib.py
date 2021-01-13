@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from os import listdir
 from os.path import isfile, join
 from random import random, randint, seed
+import json
 seed(1)
 
 
@@ -79,12 +80,24 @@ class DetVis:
         single_labels["name"] = detections_name
         # W sumie formatu użył bym tylko do przeskonwertowania na xywh
         single_labels["format"] = detections_format
-        labels_files = [f for f in listdir(dir_path) if isfile(join(dir_path, f))]
         labels_files_content = {}
-        for file_name in labels_files:
-            file = open(dir_path + '\\' + file_name, 'r')
-            labels_files_content[file_name.split('.')[0]] = file.readlines()
-        single_labels["detections"] = labels_files_content
+        if single_labels["format"] == "coco" or single_labels["format"] == "pascal":
+            file = open(dir_path, 'r')
+            detections = json.load(file)
+            for detection in detections:
+                img_key = detection['image_id'].split('.')[0]
+                if img_key not in labels_files_content:
+                    labels_files_content[detection['image_id'].split('.')[0]] = []
+                det_line = [str(detection['category_id']), str(detection['score'])]
+                det_line = det_line + [str(i) for i in detection['bbox']]
+                labels_files_content[detection['image_id'].split('.')[0]].append(" ".join(det_line))
+            single_labels["detections"] = labels_files_content
+        else:
+            labels_files = [f for f in listdir(dir_path) if isfile(join(dir_path, f))]
+            for file_name in labels_files:
+                file = open(dir_path + '\\' + file_name, 'r')
+                labels_files_content[file_name.split('.')[0]] = file.readlines()
+            single_labels["detections"] = labels_files_content
         self.labels[detections_name] = single_labels
         
     def load_gt(self, dir_path, gt_format):
@@ -103,6 +116,11 @@ class DetVis:
             detection['confidence'] = round(float(det[1]),3)
             detection['top_left'] = (int((float(det[2]))), int(float(det[3])))
             detection['bottom_right'] = (int((float(det[4]))), int(float(det[5])))
+        elif det_format == "coco":
+            detection['class'] = int(det[0])
+            detection['confidence'] = round(float(det[1]),3)
+            detection['top_left'] = (int((float(det[2]))), int((float(det[3]))))
+            detection['bottom_right'] = (int((float(det[2]) + float(det[4]))), int((float(det[3]) + float(det[5]))))
         else:
             raise TypeError("Unknown detections format!")
         return detection
