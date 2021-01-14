@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jan 13 17:22:59 2021
-
 @author: gasie
 """
 
@@ -30,12 +28,9 @@ class DetVis:
         yA = max(boxA[1], boxB[1])
         xB = min(boxA[2], boxB[2])
         yB = min(boxA[3], boxB[3])
-        # Compute the area of intersection rectangle
         interArea = max(0, xB - xA + 1) * max(0, yB - yA + 1)
-        # Compute the area of both the prediction and ground-truth
         boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
         boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
-        # Compute the intersection over union
         iou = interArea / float(boxAArea + boxBArea - interArea)
         return iou
     
@@ -59,12 +54,6 @@ class DetVis:
         # Add text
         cv2.putText(image, text, (x + int(w/18),y - int(h/3)), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 4)
         
-    def __draw_legend_element(self, image, coords, size, class_name, color):
-        x, y = coords[0], coords[1]
-        #print(image, (x, y), (x + size*0.5, y - size*0.5), color, -1)
-        cv2.rectangle(image, (x, y), (int(x + size*2), int(y - size*2)), color, -1)
-        cv2.putText(image, str(class_name), (int(x + size*3), int(y - size*0.75)), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 4)
-        
     def load_images(self, dir_path):
         images_files = [f for f in listdir(dir_path) if isfile(join(dir_path, f))]
         for file_name in images_files:
@@ -82,7 +71,7 @@ class DetVis:
         # W sumie formatu użył bym tylko do przeskonwertowania na xywh
         single_labels["format"] = detections_format
         labels_files_content = {}
-        if single_labels["format"] == "coco" or single_labels["format"] == "pascal":
+        if single_labels["format"] == "coco":
             file = open(dir_path, 'r')
             detections = json.load(file)
             for detection in detections:
@@ -93,6 +82,9 @@ class DetVis:
                 det_line = det_line + [str(i) for i in detection['bbox']]
                 labels_files_content[detection['image_id'].split('.')[0]].append(" ".join(det_line))
             single_labels["detections"] = labels_files_content
+        elif single_labels["format"] == "pascal":
+            # TODO
+            raise ValueError("Pascal format not prepared yet!")
         else:
             labels_files = [f for f in listdir(dir_path) if isfile(join(dir_path, f))]
             for file_name in labels_files:
@@ -105,13 +97,13 @@ class DetVis:
         self.load_detections(dir_path, gt_format, "GT")
     
     # Convert detections to universal format: class, confidence, top-left, bottom-roght
-    def __dets_to_universal_format(self, det_format, det):
+    def __dets_to_universal_format(self, det_format, det, img):
         detection = {}
         if det_format == "darknet":
             detection['class'] = int(det[0])
             detection['confidence'] = round(float(det[1]),3)
-            detection['top_left'] = (int((float(det[2]) - float(det[4])/2)), int((float(det[3]) - float(det[5])/2)))
-            detection['bottom_right'] = (int((float(det[2]) + float(det[4])/2)), int((float(det[3]) + float(det[5])/2)))
+            detection['top_left'] = (int((float(det[2]) - float(det[4])/2) * img['w']), int((float(det[3]) - float(det[5])/2) * img['h']))
+            detection['bottom_right'] = (int((float(det[2]) + float(det[4])/2) * img['w']), int((float(det[3]) + float(det[5])/2) * img['h']))
         elif det_format == "detectron":
             detection['class'] = int(det[0])
             detection['confidence'] = round(float(det[1]),3)
@@ -128,7 +120,7 @@ class DetVis:
 
 
             
-    def plot_detections(self, detections_name, thickness, colors, conf_thresh = 0, no_labels = False, iou_calc = False):
+    def plot_detections(self, detections_name, thickness, colors = [], conf_thresh = 0, no_labels = False, iou_calc = False):
         # Rand colors if user does not pass them
         if len(colors) == 0:
             for x in range(len(self.classes_dict)):
@@ -137,7 +129,7 @@ class DetVis:
             gts = self.labels['GT']['detections']
         for i, img in enumerate(self.images):
             for det in self.labels[detections_name]['detections'][img['name']]:
-                det = self.__dets_to_universal_format(self.labels[detections_name]['format'], det.split()) 
+                det = self.__dets_to_universal_format(self.labels[detections_name]['format'], det.split(), img) 
                 if det['confidence'] >= conf_thresh:
                     class_name = str(self.classes_dict[det['class']])
                     class_color = colors[det['class']]
@@ -154,8 +146,6 @@ class DetVis:
                     else:
                         if not no_labels:
                             self.__draw_text_with_background(img['img'], obj_label, class_color, det['top_left'])
-            # if legend:
-            #     self.plot_legend(img)
             self.colors[detections_name] = colors
             self.images[i] = img
     
@@ -169,11 +159,18 @@ class DetVis:
                 img['img'] = cv2.rectangle(img['img'], top_left, bottom_right, color, thickness)
             self.images[i] = img
             
+    def __draw_legend_element(self, image, coords, size, class_name, color):
+        x, y = coords[0], coords[1]
+        cv2.rectangle(image, (x, y), (int(x + size*2), int(y - size*2)), color, -1)
+        text_thickness = 1
+        if size >= 10:
+            text_thickness = 3
+        cv2.putText(image, str(class_name), (int(x + size*3), int(y - size*0.75)), cv2.FONT_HERSHEY_SIMPLEX, size*0.07, color, text_thickness)      
+        
     def plot_legend(self):
         for n, img in enumerate(self.images):
             img_width, img_height = img['w'], img['h']
-            # Find longest name in class names
-            w = 0.18*img_width #len(sorted(classes_dict.values(), key=len)[-1]) * 18 + 180
+            w = 0.2*img_width 
             h = 0.033*img_height * len(self.classes_dict) * len(self.colors)#50 * len(classes_dict)
             #print(img['img'], (0.8*img_width, 0.8*img_height), (0.8*img_width + w, 0.8*img_height - h), (0,0,0), -1)
             cv2.rectangle(img['img'], (int(0.8*img_width), int(0.05*img_height)), (int(0.8*img_width + w), int(0.05*img_height + h)), (0,0,0), -1)
