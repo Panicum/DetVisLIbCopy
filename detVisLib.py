@@ -23,6 +23,7 @@ class DetVis:
         self.images = []
         self.labels = {}
         self.classes_dict = classes_dict
+        self.colors = {}
         
     def __bb_iou(self, boxA, boxB):
         xA = max(boxA[0], boxB[0])
@@ -155,6 +156,7 @@ class DetVis:
                             self.__draw_text_with_background(img['img'], obj_label, class_color, det['top_left'])
             # if legend:
             #     self.plot_legend(img)
+            self.colors[detections_name] = colors
             self.images[i] = img
     
     def plot_gt(self, color, thickness):
@@ -167,17 +169,19 @@ class DetVis:
                 img['img'] = cv2.rectangle(img['img'], top_left, bottom_right, color, thickness)
             self.images[i] = img
             
-    def plot_legend(self, img):
-        img_width, img_height = img['w'], img['h']
-        # Find longest name in class names
-        w = 0.18*img_width #len(sorted(classes_dict.values(), key=len)[-1]) * 18 + 180
-        h = 0.05*img_height * len(self.classes_dict)#50 * len(classes_dict)
-        #print(img['img'], (0.8*img_width, 0.8*img_height), (0.8*img_width + w, 0.8*img_height - h), (0,0,0), -1)
-        cv2.rectangle(img['img'], (int(0.8*img_width), int(0.05*img_height)), (int(0.8*img_width + w), int(0.05*img_height + h)), (0,0,0), -1)
-        i = 1
-        for class_item in self.classes_dict.items():
-            self.__draw_legend_element(img['img'], (int(0.8*img_width+0.01*img_width), int(0.05*img_height + 0.03*img_height * i)), 0.01*img_height, class_item[1][0],class_item[1][1])
-            i =+ 2
+    def plot_legend(self):
+        for n, img in enumerate(self.images):
+            img_width, img_height = img['w'], img['h']
+            # Find longest name in class names
+            w = 0.18*img_width #len(sorted(classes_dict.values(), key=len)[-1]) * 18 + 180
+            h = 0.033*img_height * len(self.classes_dict) * len(self.colors)#50 * len(classes_dict)
+            #print(img['img'], (0.8*img_width, 0.8*img_height), (0.8*img_width + w, 0.8*img_height - h), (0,0,0), -1)
+            cv2.rectangle(img['img'], (int(0.8*img_width), int(0.05*img_height)), (int(0.8*img_width + w), int(0.05*img_height + h)), (0,0,0), -1)
+            i = 1
+            for model_name in self.colors:
+                for class_item in self.classes_dict:
+                    self.__draw_legend_element(img['img'], (int(0.8*img_width+0.01*img_width), int(0.05*img_height + 0.03*img_height * i)), 0.01*img_height, model_name + " " + self.classes_dict[class_item], self.colors[model_name][class_item])
+                    i += 1
             
     # def __calc_image_statistics(img_stats, iou_threshold, iou, correct_class):
     #     if correct_class and iou > iou_threshold:
